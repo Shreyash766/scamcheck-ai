@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScamCheck AI - Is this a scam?</title>
+<style>
+  :root {
+    --bg: #0f172a; --card: #1e293b; --text: #e2e8f0; --muted: #94a3b8;
+    --accent: #38bdf8; --low: #22c55e; --med: #f59e0b; --high: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header { padding: 20px 24px; border-bottom: 1px solid #334155; font-weight: 700; }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 20px; }
+  h1 { font-size: 2rem; margin: 0 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  .card { background: var(--card); border-radius: 14px; padding: 24px; }
+  textarea {
+    width: 100%; min-height: 140px; resize: vertical; padding: 12px; font: inherit;
+    background: var(--bg); color: var(--text); border: 1px solid #334155; border-radius: 10px;
+  }
+  .row { margin-top: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  input[type=file] { color: var(--muted); }
+  button {
+    background: var(--accent); color: #0f172a; border: 0; border-radius: 10px;
+    padding: 12px 22px; font-weight: 700; cursor: pointer;
+  }
+  button:disabled { opacity: .6; cursor: wait; }
+  .hint { color: var(--muted); font-size: .85rem; margin: 12px 0 0; }
+  #result { margin-top: 24px; }
+  .badge { display: inline-block; padding: 6px 12px; border-radius: 999px; font-weight: 700; font-size: .9rem; }
+  .LOW { background: var(--low); color: #052e16; }
+  .MEDIUM { background: var(--med); color: #451a03; }
+  .HIGH { background: var(--high); color: #fff; }
+  .bar { height: 10px; background: #334155; border-radius: 999px; overflow: hidden; margin: 16px 0; }
+  .bar div { height: 100%; transition: width .6s; }
+  ul { padding-left: 20px; }
+  li { margin: 6px 0; }
+  .section-title { font-weight: 700; margin: 20px 0 6px; }
+  .next { background: var(--bg); border-left: 4px solid var(--accent); padding: 12px 16px; border-radius: 8px; margin-top: 16px; }
+  .error { color: #fca5a5; }
+  footer { text-align: center; color: var(--muted); font-size: .85rem; padding: 30px; }
+  .free { color:#38bdf8;
+    font-weight: 700; font-size: .9rem;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  h1{text-align:center;}
+</style>
+</head>
+<body>
+<header>ScamCheck AI</header>
+<main>
+  <p class="free">FREE SCAM CHECKER · NO  SIGN-UP REQUIRED</p>
+  <h1>Is this a scam? Check it in seconds.</h1>
+  <p class="sub">Paste a message, link or phone number, or upload a screenshot. Get a risk score and the safest next step.</p>
+
+  <form id="checkForm" class="card">
+    <textarea id="text" placeholder="Paste the full message, including who sent it and any links..."></textarea>
+    <div class="row">
+      <input type="file" id="image" accept="image/*">
+      <button type="submit" id="submitBtn">Check it free</button>
+    </div>
+    <p class="hint">Remove passwords, OTPs and account numbers before submitting. Nothing is stored.</p>
+  </form>
+
+  <section id="result" class="card" hidden></section>
+</main>
+<footer>This is an automated assessment, not a guarantee. Always verify through official channels.</footer>
+
+<script>
+const form = document.getElementById("checkForm");
+const result = document.getElementById("result");
+const btn = document.getElementById("submitBtn");
+
+function esc(value) {
+  const div = document.createElement("div");
+  div.textContent = value ?? "";
+  return div.innerHTML;
+}
+
+function showError(message) {
+  result.hidden = false;
+  result.innerHTML = `<p class="error">${esc(message)}</p>`;
+}
+
+function showResult(d) {
+  const colors = { LOW: "var(--low)", MEDIUM: "var(--med)", HIGH: "var(--high)" };
+  result.hidden = false;
+  result.innerHTML = `
+    <span class="badge ${d.level}">${esc(d.label)}</span>
+    <div class="bar"><div style="width:${d.score}%; background:${colors[d.level]}"></div></div>
+    <strong>Risk score: ${d.score}/100</strong>
+    <div class="section-title">Why we flagged it</div>
+    <ul>${d.reasons.map(r => `<li>${esc(r)}</li>`).join("")}</ul>
+    ${d.urls.length ? `<div class="section-title">Links found</div>
+      <ul>${d.urls.map(u => `<li>${esc(u)}</li>`).join("")}</ul>` : ""}
+    ${d.extracted_text ? `<div class="section-title">Text read from screenshot</div>
+      <p class="hint">${esc(d.extracted_text)}</p>` : ""}
+    <div class="next"><strong>What to do next:</strong> ${esc(d.next_step)}</div>`;
+  result.scrollIntoView({ behavior: "smooth" });
+}
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const text = document.getElementById("text").value.trim();
+  const file = document.getElementById("image").files[0];
+
+  btn.disabled = true;
+  btn.textContent = "Checking...";
+  try {
+    let response;
+    if (file) {
+      const body = new FormData();
+      body.append("image", file);
+      body.append("text", text);
+      response = await fetch("/api/check-image", { method: "POST", body });
+    } else {
+      response = await fetch("/api/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+    }
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Something went wrong.");
+    showResult(data);
+  } catch (err) {
+    showError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Check it free";
+  }
+});
+</script>
+</body>
+</html>
