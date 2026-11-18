@@ -1,5 +1,6 @@
 import io
 
+import pytesseract
 
 def extract_text_from_image(image_bytes):
     """Read text from a screenshot using Tesseract OCR."""
